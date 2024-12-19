@@ -47,9 +47,15 @@ def search_files_in_path(path, filenames=None):
             file_path = os.path.join(root, file)
 
             if filenames is None or file in filenames:
-                with open(file_path, 'r') as f:
-                    matching_files[file] = f.read()
-                logging.info(f"File found and read: {file_path}")
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        matching_files[file] = f.read()
+                        logging.info(f"File found and read: {file_path}")
+                except UnicodeDecodeError:
+                    logging.warning(f"Failed to read file {file_path} with UTF-8 encoding. Trying binary mode.")
+                    with open(file_path, 'rb') as f:
+                        matching_files[file] = f.read().decode('latin1', errors='ignore')
+                        logging.info(f"File read with fallback encoding: {file_path}")
 
     return matching_files
 
@@ -84,8 +90,8 @@ def main():
     """
     Main function for executing the program.
     """
-    working_directory = "/home/andre/IdeaProjects/algosec-connector/src"
-    initial_prompt = "Mach mir eine Analyse auf Basis des BSI Grundschutzes"
+    working_directory = "/home/andre/IdeaProjects/algosec-connector"
+    initial_prompt = "Erstelle mir einen Betriebshandbuch"
 
     # Extend prompt with all files in the directory
     prompt = extend_prompt_with_files(initial_prompt, working_directory)
