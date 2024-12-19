@@ -1,51 +1,87 @@
-Erstelle mir ein Programm das einen prompt an eine api schickt
-Wieder auch wie fest auszusehen hat zeigt der folgende curl befehl
+# Programm in python - API-Aufruf zur Prompt-Verarbeitung
 
-
+# Rest Client
+Implementiere ein Programm, das einen Prompt an die folgende API sendet:
+vbnet
+Code kopieren
 curl "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=GEMINI_API_KEY" \
 -H 'Content-Type: application/json' \
 -X POST \
 -d '{
   "contents": [{
     "parts":[{"text": "Explain how AI works"}]
-    }]
-   }'
-
-Der prompt der über den rückwärts verschickt wird wird wie folgt gebildet:
-
-Erstelle mir Methoden zum Erweitern des prompt
-In den Methoden soll geschaut werden ob der Name einer Datei auftaucht
-Wenn der Name einer Datei auftaucht dann soll in einem übergebenen Pfad geschaut werden ob die Datei vorhanden ist und wenn ja soll der Inhalt zu dem prompt hinzugefügt werden
-Das Verzeichnis ist rekursiv zu durchsuchen
+  }]
+}'
+# env
+Der API-Key soll nicht hardcodiert sein, sondern aus einer Umgebungsvariable gelesen werden.
 
 
-Der Response enthält einen Body mit der Antwort
-Sollte dieser dieser Body einen Dateinamen oder mehrere enthalten dann soll in dem Pfad gesucht werden nach den Dateien und diese dann aktualisiert werden
-sind  die Dateien nicht enthalten sollte sie neu angelegt werden
+# Erweiterung des Prompts durch Dateiinhalte:
 
 
-Baue ein entsprechendes logging dass mir den Request und den response ausgibt
+# Verzeichniss auslesen / prompt bauen
+Schreibe Methoden, die den Prompt erweitern, indem:
 
-logge Auch die Aktivitäten auf dem Dateisystem zu Änderung führen
+Geprüft wird, ob Dateinamen im Prompt enthalten sind.
+Die angegebenen Dateien in einem definierten Verzeichnis gesucht werden.
+Falls eine oder mehr Datei existieren, sollen der Inhalt in den Prompt aufgenommen werden.
+Die Verzeichnis soll rekursiv durchsucht werden.
 
-
-
-Der API key soll von der Umgebungsvariable gelesen werden
- 
-
-Wenn ein Pfad angegeben worden ist dann und kein expliziter Dateiname dann ist der Inhalt aller Dateien einzulesen und der prompt entsprechend zu erweitern dabei ist darauf zu achten dass rekursiv alle Unterverzeichnisse berücksichtigt werden
-
+Der Arbeitsordner (working directory) und der übergebene Pfad sollen identisch sein.
 
 
+# logging
+Logging-Anforderungen
+Logging des Requests und Responses:
 
-Erstelle entsprechende Tests
+Logge den vollständigen Request und die API-Antwort (Response).
+Logging der Dateiverarbeitung:
 
-Erstelle einen Test mit folgenden Dateipfad /home/andre/IdeaProjects/algosec-connector/src
-Der Inhalt des promtes soll sein:
-Mach mir eine Analyse auf Basis des BSI grundschutzes
+Logge alle eingelesenen Dateien, die für den Request verwendet werden.
+Logge Aktivitäten auf dem Dateisystem, die Änderungen verursachen (z. B. Dateiaktualisierungen oder Neuanlagen).
 
 
-Working directory und der Pfad sind das gleiche
- 
 
-Der response hat ein Feld Text dieser Inhalt soll formatiert ausgegeben werden dabei sollen entsprechende Zeichen für die Zeilenumbrüche richtig interpretiert werden
+# Verarbeitung von Verzeichnissen:
+
+Es können beliebig viele Pfade zu Verzeichnissen oder zu Dateien übergeben werden
+Werden Verzeichnisse übergeben sind alle Dateien und die Unterverzeichnisse mit Dateien relevant
+Wird ein Pfad zu einer Datei übergeben ist diese relevant
+Berücksichtige rekursiv immer alle Unterverzeichnisse.
+
+##  Glob-Mustern
+ Glob-Mustern wird verwendet um Dateien und Verzeichnisse zu beschreiben
+Es können Wildcards verwendet werden um bestimmte Dateitypen oder bestimmte namens Muster zu definieren so wie es allgemein üblich ist
+
+
+# Verarbeitung des Responses
+
+Der Response enthält einen Body mit einem oder mehreren Dateinamen.
+Suche diese Dateien im definierten Pfad.
+Falls vorhanden: Aktualisiere die Inhalte der Dateien basierend auf der Antwort.
+Falls nicht vorhanden: Lege neue Dateien mit den entsprechenden Inhalten an.
+
+Das Feld text im Response soll formatiert ausgegeben werden.
+Interpretiere dabei Zeichen wie Zeilenumbrüche korrekt.
+Wartezeit visualisieren:
+
+Zeige während des Wartens auf die API-Antwort eine visuelle Ausgabe auf der Konsole (z. B. Fortschrittsbalken oder animierte Punkte).
+
+
+# Testanforderungen
+Testfall erstellen:
+Erstelle einen Test, bei dem der Prompt lautet:
+
+Erstelle eine betriebshandbuch
+/home/andre/IdeaProjects/algosec-connector/src/**.java,
+/home/andre/IdeaProjects/algosec-connector/*
+Stelle sicher, dass:
+Der Prompt korrekt verarbeitet wird.
+Dateien im definierten Pfad ordnungsgemäß gesucht, gelesen und in den Request integriert werden.
+Der Response korrekt interpretiert wird und alle notwendigen Änderungen an den Dateien vorgenommen werden.
+
+# Hinweise
+
+Der Code sollte modular aufgebaut sein, um die Anforderungen an Logging, Dateiverarbeitung und API-Integration sauber zu trennen.
+Achte auf eine klare Fehlerbehandlung für fehlende Dateien, ungültige Pfade und API-Fehler.
+Tests sollten nicht nur funktional sein, sondern auch Randfälle abdecken (z. B. keine Dateien vorhanden, ungültiger API-Key, etc.).

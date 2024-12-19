@@ -1,126 +1,111 @@
 import os
+import glob
 import json
 import logging
+import time
 import requests
+from typing import List
 
 # Configure logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("app.log"),
-        logging.StreamHandler()
-    ]
-)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-API_KEY = os.getenv("GEMINI_API_KEY")
-BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+# Constants
+API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+API_KEY_ENV_VAR = "GEMINI_API_KEY"
 
+# Function to read API key from environment
+def get_api_key() -> str:
+    api_key = os.getenv(API_KEY_ENV_VAR)
+    if not api_key:
+        raise ValueError(f"Environment variable {API_KEY_ENV_VAR} is not set.")
+    return api_key
 
-def send_prompt(prompt):
-    """
-    Sends a prompt to the API and returns the response.
-    """
-    url = f"{BASE_URL}?key={API_KEY}"
+# Function to recursively search for files matching patterns
+def find_files(base_path: str, patterns: List[str]) -> List[str]:
+    matched_files = []
+    for pattern in patterns:
+        matched_files.extend(glob.glob(os.path.join(base_path, pattern), recursive=True))
+    return matched_files
+
+# Function to read file contents
+def read_files(file_paths: List[str]) -> List[dict]:
+    contents = []
+    for file_path in file_paths:
+        try:
+            with open(file_path, 'r', encoding='utf-8') as file:
+                contents.append({"filename": file_path, "content": file.read()})
+                logger.info(f"Read content from {file_path}")
+        except Exception as e:
+            logger.error(f"Failed to read {file_path}: {e}")
+    return contents
+
+# Function to send request to the API
+def send_request(prompt: str) -> dict:
+    api_key = get_api_key()
     headers = {'Content-Type': 'application/json'}
     payload = {
-        "contents": [{
-            "parts": [{"text": prompt}]
-        }]
+        "contents": [{"parts": [{"text": prompt}]}]
     }
 
-    logging.debug(f"Sending request: {json.dumps(payload, indent=2)}")
-    response = requests.post(url, headers=headers, json=payload)
-    response.raise_for_status()
-    logging.debug(f"Received response: {response.text}")
+    logger.info(f"Sending API request: {json.dumps(payload, indent=2)}")
+
+    response = requests.post(f"{API_URL}?key={api_key}", headers=headers, json=payload)
+
+    logger.info(f"API Response: {response.text}")
+
+    if response.status_code != 200:
+        raise RuntimeError(f"API request failed with status code {response.status_code}: {response.text}")
+
     return response.json()
 
+# Function to process response and update/create files
+def process_response(response: dict, base_path: str):
+    for content in response.get("contents", []):
+        filename = content.get("filename")
+        file_content = content.get("text")
 
-def search_files_in_path(path, filenames=None):
-    """
-    Recursively searches for files in a given path and optionally checks for specific filenames.
-    """
-    matching_files = {}
+        if not filename or not file_content:
+            logger.warning("Invalid content in response: missing filename or text.")
+            continue
 
-    for root, _, files in os.walk(path):
-        for file in files:
-            file_path = os.path.join(root, file)
+        file_path = os.path.join(base_path, filename)
+        try:
+            if os.path.exists(file_path):
+                logger.info(f"Updating existing file: {file_path}")
+            else:
+                logger.info(f"Creating new file: {file_path}")
+            with open(file_path, 'w', encoding='utf-8') as file:
+                file.write(file_content)
+        except Exception as e:
+            logger.error(f"Failed to write to {file_path}: {e}")
 
-            if filenames is None or file in filenames:
-                try:
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        matching_files[file] = f.read()
-                        logging.info(f"File found and read: {file_path}")
-                except UnicodeDecodeError:
-                    logging.warning(f"Failed to read file {file_path} with UTF-8 encoding. Trying binary mode.")
-                    with open(file_path, 'rb') as f:
-                        matching_files[file] = f.read().decode('latin1', errors='ignore')
-                        logging.info(f"File read with fallback encoding: {file_path}")
+# Main function to process prompt
+def process_prompt(prompt: str, base_path: str, patterns: List[str]):
+    logger.info(f"Processing prompt: {prompt}")
 
-    return matching_files
+    # Search for files and integrate contents into prompt
+    file_paths = find_files(base_path, patterns)
+    logger.info(f"Found files: {file_paths}")
 
+    file_contents = read_files(file_paths)
+    for file in file_contents:
+        prompt += f"\n\nFile: {file['filename']}\n{file['content']}"
 
-def extend_prompt_with_files(prompt, path, filenames=None):
-    """
-    Extends the given prompt by including the content of files found in the path.
-    """
-    file_contents = search_files_in_path(path, filenames)
+    # Send prompt to API
+    logger.info("Waiting for API response...")
+    response = send_request(prompt)
 
-    for filename, content in file_contents.items():
-        prompt += f"\n\n--- File: {filename} ---\n{content}"
+    # Process API response
+    process_response(response, base_path)
 
-    return prompt
-
-
-def update_or_create_files(path, filenames_with_contents):
-    """
-    Updates or creates files based on the given content.
-    """
-    for filename, content in filenames_with_contents.items():
-        file_path = os.path.join(path, filename)
-
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-
-        with open(file_path, 'w') as f:
-            f.write(content)
-            logging.info(f"File updated or created: {file_path}")
-
-
-def main():
-    """
-    Main function for executing the program.
-    """
-    working_directory = "/home/andre/IdeaProjects/algosec-connector"
-    initial_prompt = "Erstelle mir einen Betriebshandbuch"
-
-    # Extend prompt with all files in the directory
-    prompt = extend_prompt_with_files(initial_prompt, working_directory)
-
-    # Send the prompt to the API
-    response = send_prompt(prompt)
-
-    # Process the response
-    body = response.get("contents", [])
-    filenames_with_contents = {}
-
-    for content in body:
-        if 'parts' in content:
-            for part in content['parts']:
-                if 'text' in part:
-                    filename = part.get("filename", "response_output.txt")
-                    filenames_with_contents[filename] = part['text']
-
-    # Update or create files with the response content
-    update_or_create_files(working_directory, filenames_with_contents)
-
-    # Print formatted response text to console
-    for content in body:
-        for part in content.get("parts", []):
-            if "text" in part:
-                formatted_text = part["text"].replace("\\n", "\n")
-                print("\nFormatted Text Response:\n")
-                print(formatted_text)
-
-
+# Test case
 if __name__ == "__main__":
-    main()
+    try:
+        test_prompt = "Erstelle eine betriebshandbuch"
+        base_path = "/home/andre/IdeaProjects/algosec-connector"
+        patterns = ["src/**/*.java", "*"]
+
+        process_prompt(test_prompt, base_path, patterns)
+    except Exception as e:
+        logger.error(f"Error during processing: {e}")
