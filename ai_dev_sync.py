@@ -8,6 +8,7 @@ import sys
 import time
 from pathlib import Path
 from typing import List, Dict
+from threading import Thread
 
 # Konfiguration für Logging
 logging.basicConfig(
@@ -33,27 +34,28 @@ class APIClient:
             }]
         }
         logging.info(f"Sending API request with payload: {json.dumps(payload)}")
-        response = self._with_progress(lambda: requests.post(f"{API_URL}?key={self.api_key}", headers=headers, json=payload))
-        response.raise_for_status()
-        logging.info(f"Received API response: {response.text}")
-        return response.json()
+        response_container = {}
+        progress_thread = Thread(target=self._show_progress, args=(response_container,))
+        progress_thread.start()
+        try:
+            response = requests.post(f"{API_URL}?key={self.api_key}", headers=headers, json=payload)
+            response.raise_for_status()
+            response_container['done'] = True
+            logging.info(f"Received API response: {response.text}")
+            return response.json()
+        finally:
+            progress_thread.join()
 
-    def _with_progress(self, request_func):
-        spinner = itertools.cycle(['|', '/', '-', '\\'])
+    def _show_progress(self, response_container):
         sys.stdout.write("Waiting for API response ")
         sys.stdout.flush()
-        result = None
-
-        try:
-            while not result:
-                sys.stdout.write(next(spinner))
-                sys.stdout.flush()
-                time.sleep(0.1)
-                sys.stdout.write("\b")
-                result = request_func()
-        finally:
-            sys.stdout.write("\n")
-        return result
+        dots = itertools.cycle(['.', '..', '...'])
+        while not response_container.get('done'):
+            sys.stdout.write(next(dots))
+            sys.stdout.flush()
+            time.sleep(0.5)
+            sys.stdout.write('\b' * len(next(dots)))
+        sys.stdout.write("\n")
 
 class FileManager:
     def __init__(self, base_directory: Path):
@@ -96,6 +98,9 @@ class FileManager:
             for line in diff:
                 logging.info(line)
 
+    def log_file_activity(self, action: str, file_path: Path):
+        logging.info(f"File {action}: {file_path}")
+
     def find_existing_or_new_path(self, package_path: str, file_name: str) -> Path:
         existing_files = self.find_files([f"{package_path}/{file_name}"])
         if existing_files:
@@ -117,9 +122,11 @@ class PromptProcessor:
                 files = self.file_manager.find_files(patterns)
                 for file in files:
                     content = self.file_manager.read_file_content(file)
+                    self.file_manager.log_file_activity("read", file)
                     prompt += f"\n\n---\n{file}:{content}"  # Dateiinhalt hinzufügen
             elif path.is_file():
                 content = self.file_manager.read_file_content(path)
+                self.file_manager.log_file_activity("read", path)
                 prompt += f"\n\n---\n{path}:{content}"
         logging.info(f"Constructed prompt: {prompt}")
         return prompt
@@ -133,17 +140,21 @@ class ResponseHandler:
         for candidate in candidates:
             parts = candidate.get("content", {}).get("parts", [])
             for part in parts:
-                if "```java" in part["text"]:
-                    java_content = self.extract_code(part["text"], "java")
-                    if java_content:
-                        self.update_files(java_content)
+                self.extract_and_update_java_files(part["text"])
 
-    def extract_code(self, text: str, language: str) -> str:
-        start_tag = f"```{language}"
+    def extract_and_update_java_files(self, text: str):
+        start_tag = "```java"
         end_tag = "```"
-        start = text.find(start_tag) + len(start_tag)
-        end = text.find(end_tag, start)
-        return text[start:end].strip() if start_tag in text and end > start else ""
+        while start_tag in text:
+            start = text.find(start_tag) + len(start_tag)
+            end = text.find(end_tag, start)
+            if end == -1:
+                break
+            java_content = text[start:end].strip()
+            text = text[end + len(end_tag):]  # Continue with the remaining text
+
+            # Process the extracted Java content
+            self.update_files(java_content)
 
     def update_files(self, content: str):
         # Extract package name and file content
@@ -163,6 +174,9 @@ class ResponseHandler:
                 package_path = package_line.replace("package", "").replace(";", "").strip().replace(".", "/")
                 file_path = self.file_manager.find_existing_or_new_path(package_path, file_name)
                 self.file_manager.write_file_content(file_path, file_content)
+                self.file_manager.log_file_activity("updated", file_path)
+
+
 
 
 # Hauptprogramm
@@ -181,7 +195,7 @@ if __name__ == "__main__":
     paths = [base_directory]
     base_prompt = ("Aktualisiere alle Java klassen "
                    "Füge einen Error Code hinzu dieser soll technisch ein enum sein und zentral verwaltet werden "
-                   "der Error Code soll Teil des Logstatments sein.")
+                   "der Error Code soll Teil des error Logstatments sein.")
     patterns = ["*.java"]  # Beispiel für Glob-Muster
 
     constructed_prompt = prompt_processor.build_prompt(base_prompt, paths, patterns)
