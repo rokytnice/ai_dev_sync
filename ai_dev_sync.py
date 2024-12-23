@@ -10,15 +10,8 @@ from pathlib import Path
 from typing import List, Dict
 from threading import Thread
 
-# Konfiguration für Logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("app.log"),
-        logging.StreamHandler()
-    ]
-)
+import logging
+
 
 API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
 
@@ -62,11 +55,12 @@ class FileManager:
         self.base_directory = base_directory
 
     def find_files(self, patterns: List[str]) -> List[Path]:
-        files = []
+        files = list(self.base_directory.rglob("*"))
+        filtered_files = []
         for pattern in patterns:
-            files.extend(self.base_directory.rglob(pattern))
-        logging.info(f"Files matching patterns {patterns}: {files}")
-        return files
+            filtered_files.extend([f for f in files if f.match(pattern)])
+        logging.info(f"Filtered files: {filtered_files}")
+        return filtered_files
 
     def read_file_content(self, file_path: Path) -> str:
         logging.info(f"Reading content from file: {file_path}")
@@ -177,6 +171,30 @@ class ResponseHandler:
                 self.file_manager.log_file_activity("updated", file_path)
 
 
+# Logging-Konfiguration
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler("app.log", encoding="utf-8"),
+        logging.StreamHandler()
+    ]
+)
+
+
+class CustomStreamHandler(logging.StreamHandler):
+    def emit(self, record):
+        super().emit(record)
+        sys.stdout.write(self.format(record) + "\n")
+        sys.stdout.flush()
+
+
+# Beispiel zur Nutzung
+logging.getLogger().handlers = []  # Entferne Standard-Handler
+logging.getLogger().addHandler(CustomStreamHandler())
+logging.getLogger().addHandler(logging.FileHandler("app.log"))
+
+
 
 
 # Hauptprogramm
@@ -193,10 +211,13 @@ if __name__ == "__main__":
 
     # Beispiel-Aufruf
     paths = [base_directory]
-    base_prompt = ("Aktualisiere alle Java klassen "
-                   "Füge einen Error Code hinzu dieser soll technisch ein enum sein und zentral verwaltet werden "
-                   "der Error Code soll Teil des error Logstatments sein.")
-    patterns = ["*.java"]  # Beispiel für Glob-Muster
+    base_prompt = ("Erstelle mir ein Sicherheitskonzept nach BSI Grundschutz" 
+                    "wichtig ist dass alle Anforderungen aus dem BSI Grundschutz Teil des Sicherheitskonzeptes sind und aufgelistet werden" 
+                    "Führer auch die Sachen auf die bereits erfüllt sind"
+                   )
+
+
+    patterns = ["*.java","*.conf","*.propetries","*.yml"]
 
     constructed_prompt = prompt_processor.build_prompt(base_prompt, paths, patterns)
     try:
