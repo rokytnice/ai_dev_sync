@@ -1,0 +1,41 @@
+
+https://chatgpt.com/g/g-p-677e38a0616c819181c1999f0b060309-agents-swarm/project
+https://chatgpt.com/g/g-p-677e38a0616c819181c1999f0b060309-agents-swarm/c/677e394b-b5bc-8005-8a46-52ee1d03b31f
+
+
+
+Ich will ein python programm  bauen dass eine Anfrage an einen LLM (open ai api) schickt und die Anfrage beinhaltet eine Aufgabe die in kleinere Aufgaben unterteilt werden soll
+
+Das LLM soll angewiesen werden diese einzelnen Aufgaben so zu formatieren dass sie später durch das Programm besser verarbeitet werden können
+
+Das LLM formuliert die einzelnen Aufgaben und schickt sie als Antwort zurück
+
+Das Programm soll jetzt die einzelnen Aufgaben identifizieren und wieder anders schicken
+
+Dieser ganze Mechanismus muss rekursiv funktionieren
+
+Wenn sich eine Aufgabe nicht weiter unterteilen lässen soll das LLM die Aufgaben bearbeiten und die Ergebnisse all dieser anfragen sollen zu einer großen Antwort durch das Programm zusammengefasst werden
+
+
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="API_KEY",
+    base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+)
+
+response = client.chat.completions.create(
+    model="gemini-1.5-flash",
+    n=1,
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {
+            "role": "user",
+            "content": "Explain to me how AI works"
+        }
+    ]
+)
+
+Der API Key soll API_KEY  heißen und über eine gleichnamige Umgebungsvariable eingelesen werden
+
+jeder request  und Response soll protokolliert werden.
