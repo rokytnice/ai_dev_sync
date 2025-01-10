@@ -1,5 +1,6 @@
 import os
 import json
+import time
 from openai import OpenAI
 
 # API-Schlüssel über Umgebungsvariablen einlesen
@@ -24,6 +25,7 @@ def send_request_to_llm(prompt):
     Sendet eine Anfrage an das LLM und gibt die Antwort zurück.
     """
     log_to_stdout("REQUEST", prompt)
+    time.sleep(5)  # Warten Sie 5 Sekunden, bevor die Anfrage gesendet wird
     response = client.chat.completions.create(
         model="gemini-1.5-flash",
         n=1,
@@ -33,6 +35,7 @@ def send_request_to_llm(prompt):
         ]
     )
     response_content = response.choices[0].message.content
+    log_to_stdout("RAW RESPONSE", json.dumps(response.to_dict(), indent=2))
     log_to_stdout("RESPONSE", response_content)
     return response_content
 
@@ -51,18 +54,31 @@ def split_task_into_subtasks(task):
     )
     response = send_request_to_llm(prompt)
     try:
+        if response.startswith("```json") and response.endswith("```"):
+            response = "\n".join(response.splitlines()[1:-1]).strip()
+        response = response.replace("```json", "").strip()
+        response = response.replace("`", "").strip()
         result = json.loads(response)
         return result.get("subtasks", [])
     except json.JSONDecodeError:
         print("Fehler beim Parsen der LLM-Antwort. Versuche, die Antwort zu reparieren...")
-        # Repariere die JSON-Daten, indem Einrückungen entfernt werden
-        cleaned_response = "\n".join(line.strip() for line in response.splitlines())
+        response = response.replace("\n", "").replace("\t", "").strip()
+        if not (response.startswith("{") and response.endswith("}")):
+            response = "{" + response.split("{", 1)[-1]
+            response = response.rsplit("}", 1)[0] + "}"
         try:
-            result = json.loads(cleaned_response)
+            result = json.loads(response)
             return result.get("subtasks", [])
         except json.JSONDecodeError:
-            print("Reparatur fehlgeschlagen. Antwort bleibt unbrauchbar:", response)
-            return []
+            print("Weitere Reparaturversuche...")
+            response_cleaned = response.replace("\\", "").replace("'", "\"")
+            try:
+                result = json.loads(response_cleaned)
+                return result.get("subtasks", [])
+            except json.JSONDecodeError:
+                print("Reparatur fehlgeschlagen. Antwort bleibt unbrauchbar:")
+                print(response_cleaned)
+                return []
 
 def process_task(task):
     """

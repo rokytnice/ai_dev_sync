@@ -10,11 +10,11 @@ Das LLM soll angewiesen werden diese einzelnen Aufgaben so zu formatieren dass s
 
 Das LLM formuliert die einzelnen Aufgaben und schickt sie als Antwort zurück
 
-Das Programm soll jetzt die einzelnen Aufgaben identifizieren und wieder anders schicken
+Das Programm soll jetzt die einzelnen Aufgaben identifizieren und wieder an das LLM schicken
 
 Dieser ganze Mechanismus muss rekursiv funktionieren
 
-Wenn sich eine Aufgabe nicht weiter unterteilen lässen soll das LLM die Aufgaben bearbeiten und die Ergebnisse all dieser anfragen sollen zu einer großen Antwort durch das Programm zusammengefasst werden
+Wenn sich eine Aufgabe nicht weiter unterteilen lässen soll das LLM die Aufgaben bearbeiten und die Ergebnisse aller dieser anfragen sollen zu einer großen Antwort durch das Programm zusammengefasst werden
 
 
 from openai import OpenAI
