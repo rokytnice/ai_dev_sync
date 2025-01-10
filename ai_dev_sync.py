@@ -10,9 +10,6 @@ from pathlib import Path
 from typing import List, Dict
 from threading import Thread
 
-import logging
-
-
 API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
 
 class APIClient:
@@ -27,6 +24,7 @@ class APIClient:
             }]
         }
         logging.info(f"Sending API request with payload: {json.dumps(payload)}")
+        print(f"RAW REQUEST: {json.dumps(payload)}")
         response_container = {}
         progress_thread = Thread(target=self._show_progress, args=(response_container,))
         progress_thread.start()
@@ -35,6 +33,7 @@ class APIClient:
             response.raise_for_status()
             response_container['done'] = True
             logging.info(f"Received API response: {response.text}")
+            print(f"RAW RESPONSE: {response.text}")
             return response.json()
         finally:
             progress_thread.join()
@@ -66,74 +65,27 @@ class FileManager:
         logging.info(f"Reading content from file: {file_path}")
         return file_path.read_text(encoding='utf-8')
 
-    def write_file_content(self, file_path: Path, content: str):
-        if not file_path.parent.exists():
-            logging.info(f"Creating directories for path: {file_path.parent}")
-            try:
-                file_path.parent.mkdir(parents=True, exist_ok=True)
-            except PermissionError as e:
-                logging.error(f"Permission denied when creating directory {file_path.parent}: {e}")
-                return
-        old_content = file_path.read_text(encoding='utf-8') if file_path.exists() else ""
-        file_path.write_text(content, encoding='utf-8')
-        logging.info(f"File written: {file_path}")
-        self.log_diff(file_path, old_content, content)
-
-    def log_diff(self, file_path: Path, old_content: str, new_content: str):
-        if old_content != new_content:
-            logging.info(f"Changes in file {file_path}:")
-            diff = difflib.unified_diff(
-                old_content.splitlines(),
-                new_content.splitlines(),
-                fromfile="Old Content",
-                tofile="New Content",
-                lineterm=""
-            )
-            for line in diff:
-                logging.info(line)
-
-    def log_file_activity(self, action: str, file_path: Path):
-        logging.info(f"File {action}: {file_path}")
-
-    def find_existing_or_new_path(self, package_path: str, file_name: str) -> Path:
-        existing_files = self.find_files([f"{package_path}/{file_name}"])
-        if existing_files:
-            logging.info(f"Existing file found for {file_name}: {existing_files[0]}")
-            return existing_files[0]
-        else:
-            new_path = self.base_directory / package_path / file_name
-            logging.info(f"No existing file found. New path created: {new_path}")
-            return new_path
-
 class PromptProcessor:
     def __init__(self, file_manager: FileManager):
         self.file_manager = file_manager
 
-    def build_prompt(self, base_prompt: str, paths: List[Path], patterns: List[str] = ["*"]) -> str:
-        prompt = base_prompt
-        for path in paths:
-            if path.is_dir():
-                files = self.file_manager.find_files(patterns)
-                for file in files:
-                    content = self.file_manager.read_file_content(file)
-                    self.file_manager.log_file_activity("read", file)
-                    prompt += f"\n\n---\n{file}:{content}"  # Dateiinhalt hinzufügen
-            elif path.is_file():
-                content = self.file_manager.read_file_content(path)
-                self.file_manager.log_file_activity("read", path)
-                prompt += f"\n\n---\n{path}:{content}"
-        logging.info(f"Constructed prompt: {prompt}")
+    def build_prompt_for_file(self, base_prompt: str, file: Path) -> str:
+        content = self.file_manager.read_file_content(file)
+        prompt = f"{base_prompt}\n\n---\n{file}:{content}"
+        logging.info(f"Constructed prompt for file {file}: {prompt}")
         return prompt
 
 class ResponseHandler:
     def __init__(self, file_manager: FileManager):
         self.file_manager = file_manager
+        self.collected_responses = []
 
     def process_response(self, response: Dict):
         candidates = response.get("candidates", [])
         for candidate in candidates:
             parts = candidate.get("content", {}).get("parts", [])
             for part in parts:
+                self.collected_responses.append(part["text"])
                 self.extract_and_update_java_files(part["text"])
 
     def extract_and_update_java_files(self, text: str):
@@ -146,12 +98,9 @@ class ResponseHandler:
                 break
             java_content = text[start:end].strip()
             text = text[end + len(end_tag):]  # Continue with the remaining text
-
-            # Process the extracted Java content
             self.update_files(java_content)
 
     def update_files(self, content: str):
-        # Extract package name and file content
         lines = content.splitlines()
         if lines:
             package_line = next((line for line in lines if line.startswith("package ")), None)
@@ -166,62 +115,39 @@ class ResponseHandler:
 
             if package_line:
                 package_path = package_line.replace("package", "").replace(";", "").strip().replace(".", "/")
-                file_path = self.file_manager.find_existing_or_new_path(package_path, file_name)
-                self.file_manager.write_file_content(file_path, file_content)
-                self.file_manager.log_file_activity("updated", file_path)
+                file_path = self.file_manager.base_directory / package_path / file_name
+                file_path.parent.mkdir(parents=True, exist_ok=True)
+                file_path.write_text(file_content, encoding='utf-8')
+                logging.info(f"Updated file: {file_path}")
 
-
-# Logging-Konfiguration
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler("app.log", encoding="utf-8"),
-        logging.StreamHandler()
-    ]
-)
-
-
-class CustomStreamHandler(logging.StreamHandler):
-    def emit(self, record):
-        super().emit(record)
-        sys.stdout.write(self.format(record) + "\n")
-        sys.stdout.flush()
-
-
-# Beispiel zur Nutzung
-logging.getLogger().handlers = []  # Entferne Standard-Handler
-logging.getLogger().addHandler(CustomStreamHandler())
-logging.getLogger().addHandler(logging.FileHandler("app.log"))
-
-
-
-
-# Hauptprogramm
 if __name__ == "__main__":
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise EnvironmentError("API key is missing. Set GEMINI_API_KEY as an environment variable.")
 
-    base_directory = Path("/home/andre/IdeaProjects/algosec-connector/")
+    base_directory = Path("/home/andre/IdeaProjects/algosec-connector/src/main/java/fwat/application/security/logging")
     file_manager = FileManager(base_directory)
     prompt_processor = PromptProcessor(file_manager)
     api_client = APIClient(api_key)
     response_handler = ResponseHandler(file_manager)
 
-    # Beispiel-Aufruf
-    paths = [base_directory]
-    base_prompt = ("Erstelle mir ein Sicherheitskonzept nach BSI Grundschutz" 
-                    "wichtig ist dass alle Anforderungen aus dem BSI Grundschutz Teil des Sicherheitskonzeptes sind und aufgelistet werden" 
-                    "Führer auch die Sachen auf die bereits erfüllt sind"
-                   )
+    patterns = ["*.java", "*.conf", "*.properties", "*.yml"]
+    base_prompt = (" Mache einen security audit  mit den Anforderungen des BSI Grundschutz"
+                   "wichtig ist dass alle Anforderungen aus dem BSI Grundschutz Teil des "
+                   "Sicherheitskonzeptes sind und aufgelistet werden "
+                   "Führe auch die Sachen auf die bereits erfüllt sind")
 
+    files = file_manager.find_files(patterns)
+    for file in files:
+        prompt = prompt_processor.build_prompt_for_file(base_prompt, file)
+        try:
+            response = api_client.send_prompt(prompt)
+            response_handler.process_response(response)
+            time.sleep(4)  # Rate limiting: Wait for 4 seconds between requests
+        except Exception as e:
+            logging.error(f"Error occurred while processing file {file}: {e}")
 
-    patterns = ["*.java","*.conf","*.propetries","*.yml"]
-
-    constructed_prompt = prompt_processor.build_prompt(base_prompt, paths, patterns)
-    try:
-        response = api_client.send_prompt(constructed_prompt)
-        response_handler.process_response(response)
-    except Exception as e:
-        logging.error(f"Error occurred: {e}")
+    # Combine and output all collected responses
+    combined_responses = "\n\n".join(response_handler.collected_responses)
+    print("\n--- Combined Responses ---\n")
+    print(combined_responses)
