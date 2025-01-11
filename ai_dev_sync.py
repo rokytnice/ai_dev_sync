@@ -2,7 +2,6 @@ import os
 import json
 import logging
 import requests
-import difflib
 import itertools
 import sys
 import time
@@ -24,7 +23,7 @@ class APIClient:
             }]
         }
         logging.info(f"Sending API request with payload: {json.dumps(payload)}")
-        print(f"RAW REQUEST: {json.dumps(payload)}")
+        logging.info(f"RAW REQUEST: {json.dumps(payload)}")
         response_container = {}
         progress_thread = Thread(target=self._show_progress, args=(response_container,))
         progress_thread.start()
@@ -33,21 +32,16 @@ class APIClient:
             response.raise_for_status()
             response_container['done'] = True
             logging.info(f"Received API response: {response.text}")
-            print(f"RAW RESPONSE: {response.text}")
+            logging.info(f"RAW RESPONSE: {response.text}")
             return response.json()
         finally:
             progress_thread.join()
 
     def _show_progress(self, response_container):
-        sys.stdout.write("Waiting for API response ")
-        sys.stdout.flush()
         dots = itertools.cycle(['.', '..', '...'])
         while not response_container.get('done'):
-            sys.stdout.write(next(dots))
-            sys.stdout.flush()
+            logging.info(f"Waiting for API response {next(dots)}")
             time.sleep(0.5)
-            sys.stdout.write('\b' * len(next(dots)))
-        sys.stdout.write("\n")
 
 class FileManager:
     def __init__(self, base_directory: Path):
@@ -115,12 +109,20 @@ class ResponseHandler:
 
             if package_line:
                 package_path = package_line.replace("package", "").replace(";", "").strip().replace(".", "/")
-                file_path = self.file_manager.base_directory / package_path / file_name
+                package_path = package_path.lstrip("/")  # Ensure no leading slash
+                if self.file_manager.base_directory.as_posix().endswith(package_path):
+                    file_path = self.file_manager.base_directory / file_name
+                else:
+                    file_path = self.file_manager.base_directory / package_path / file_name
                 file_path.parent.mkdir(parents=True, exist_ok=True)
                 file_path.write_text(file_content, encoding='utf-8')
                 logging.info(f"Updated file: {file_path}")
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+    base_prompt = ("füge javadoc hinzu ")
+
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise EnvironmentError("API key is missing. Set GEMINI_API_KEY as an environment variable.")
@@ -132,10 +134,6 @@ if __name__ == "__main__":
     response_handler = ResponseHandler(file_manager)
 
     patterns = ["*.java", "*.conf", "*.properties", "*.yml"]
-    base_prompt = (" Mache einen security audit  mit den Anforderungen des BSI Grundschutz"
-                   "wichtig ist dass alle Anforderungen aus dem BSI Grundschutz Teil des "
-                   "Sicherheitskonzeptes sind und aufgelistet werden "
-                   "Führe auch die Sachen auf die bereits erfüllt sind")
 
     files = file_manager.find_files(patterns)
     for file in files:
@@ -149,5 +147,5 @@ if __name__ == "__main__":
 
     # Combine and output all collected responses
     combined_responses = "\n\n".join(response_handler.collected_responses)
-    print("\n--- Combined Responses ---\n")
-    print(combined_responses)
+    logging.info("\n--- Combined Responses ---\n")
+    logging.info(combined_responses)

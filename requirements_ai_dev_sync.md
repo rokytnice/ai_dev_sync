@@ -209,3 +209,14 @@ logge alle raw requests und response auf stdout
 Die Änderungen wurden vorgenommen, um alle Antworten zu sammeln und am Ende des Programms auszugeben. Die kombinierten Antworten werden unter der Überschrift „--- Combined Responses ---“ auf der Standardausgabe angezeigt. Lass mich wissen, falls weitere Anpassungen erforderlich sind!
 
 Eine Drossel wurde hinzugefügt, die dafür sorgt, dass zwischen jeder Anfrage eine Pause von 4 Sekunden eingelegt wird. Dies wurde durch ein time.sleep(4) in der Schleife erreicht. Lass mich wissen, wenn weitere Änderungen erforderlich sind!
+
+wenn der package_path=fwat/application/security/logging
+  teil des 
+  self.file_manager.base_directory =
+  /home/andre/IdeaProjects/algosec-connector/src/main/java/fwat/application/security/logging
+  also substring 
+  
+  dann sollte der pfad nicht so berechnet werden:
+  file_path = self.file_manager.base_directory / package_path / file_name
+  sondern so:
+  file_path = self.file_manager.base_directory  / file_name
