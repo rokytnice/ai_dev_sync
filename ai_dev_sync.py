@@ -8,6 +8,8 @@ import time
 from pathlib import Path
 from typing import List, Dict
 from threading import Thread
+import tkinter as tk
+from tkinter.scrolledtext import ScrolledText
 
 API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
 
@@ -55,7 +57,7 @@ class FileManager:
         logging.info(f"Filtered files: {filtered_files}")
         return filtered_files
 
-    def read_file_content(self, file_path: Path) -> str:
+    def read_file_content(self, file_path: Path):
         logging.info(f"Reading content from file: {file_path}")
         return file_path.read_text(encoding='utf-8')
 
@@ -70,9 +72,10 @@ class PromptProcessor:
         return prompt
 
 class ResponseHandler:
-    def __init__(self, file_manager: FileManager):
+    def __init__(self, file_manager: FileManager, gui=None):
         self.file_manager = file_manager
         self.collected_responses = []
+        self.gui = gui
 
     def process_response(self, response: Dict):
         candidates = response.get("candidates", [])
@@ -81,6 +84,8 @@ class ResponseHandler:
             for part in parts:
                 self.collected_responses.append(part["text"])
                 self.extract_and_update_java_files(part["text"])
+                if self.gui:
+                    self.gui.display_message(f"Response: {part['text']}")
 
     def extract_and_update_java_files(self, text: str):
         start_tag = "```java"
@@ -118,11 +123,7 @@ class ResponseHandler:
                 file_path.write_text(file_content, encoding='utf-8')
                 logging.info(f"Updated file: {file_path}")
 
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-
-    base_prompt = ("füge javadoc hinzu ")
-
+def process_files(base_prompt: str, gui=None):
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise EnvironmentError("API key is missing. Set GEMINI_API_KEY as an environment variable.")
@@ -130,8 +131,8 @@ if __name__ == "__main__":
     base_directory = Path("/home/andre/IdeaProjects/algosec-connector/src/main/java/fwat/application/security/logging")
     file_manager = FileManager(base_directory)
     prompt_processor = PromptProcessor(file_manager)
+    response_handler = ResponseHandler(file_manager, gui)
     api_client = APIClient(api_key)
-    response_handler = ResponseHandler(file_manager)
 
     patterns = ["*.java", "*.conf", "*.properties", "*.yml"]
 
@@ -145,7 +146,50 @@ if __name__ == "__main__":
         except Exception as e:
             logging.error(f"Error occurred while processing file {file}: {e}")
 
-    # Combine and output all collected responses
     combined_responses = "\n\n".join(response_handler.collected_responses)
     logging.info("\n--- Combined Responses ---\n")
     logging.info(combined_responses)
+    if gui:
+        gui.display_message(f"Combined Responses:\n{combined_responses}")
+
+class ChatGUI:
+    def __init__(self, process_callback):
+        self.root = tk.Tk()
+        self.root.title("Prompt Generator")
+
+        self.chat_area = ScrolledText(self.root, wrap=tk.WORD, state=tk.DISABLED, height=20, width=50)
+        self.chat_area.pack(padx=10, pady=10)
+
+        self.entry_field = tk.Entry(self.root, width=40)
+        self.entry_field.pack(side=tk.LEFT, padx=10, pady=10)
+
+        self.send_button = tk.Button(self.root, text="Send", command=self.send_prompt)
+        self.send_button.pack(side=tk.RIGHT, padx=10, pady=10)
+
+        self.process_callback = process_callback
+
+    def send_prompt(self):
+        prompt = self.entry_field.get()
+        if prompt.strip():
+            self.display_message(f"User: {prompt}")
+            self.display_message("Processing your input, please wait...")
+            self.root.after(100, lambda: self.process_callback(prompt, self))
+            self.entry_field.delete(0, tk.END)
+
+    def display_message(self, message: str):
+        self.chat_area.configure(state=tk.NORMAL)
+        self.chat_area.insert(tk.END, message + "\n")
+        self.chat_area.configure(state=tk.DISABLED)
+        self.chat_area.see(tk.END)
+
+    def run(self):
+        self.root.mainloop()
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+    def process_callback(prompt, gui):
+        process_files(prompt, gui)
+
+    gui = ChatGUI(process_callback)
+    gui.run()

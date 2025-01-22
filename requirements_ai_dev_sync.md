@@ -210,6 +210,8 @@ Die Änderungen wurden vorgenommen, um alle Antworten zu sammeln und am Ende des
 
 Eine Drossel wurde hinzugefügt, die dafür sorgt, dass zwischen jeder Anfrage eine Pause von 4 Sekunden eingelegt wird. Dies wurde durch ein time.sleep(4) in der Schleife erreicht. Lass mich wissen, wenn weitere Änderungen erforderlich sind!
 
+
+#fix path
 wenn der package_path=fwat/application/security/logging
   teil des 
   self.file_manager.base_directory =
@@ -220,3 +222,18 @@ wenn der package_path=fwat/application/security/logging
   file_path = self.file_manager.base_directory / package_path / file_name
   sondern so:
   file_path = self.file_manager.base_directory  / file_name
+
+
+#gui
+füge  eine GUI hinzu
+der inhalt für base_prompt soll aus einer GUI eingeben werden
+das programm soll solange laufen wie die GUI läuft
+die GUI soll wie ein chat aussehen
+der inhalt der main methode sollte in eine andre methode refactored werden und der prompt soll übergeben werden
+
+
+
+die antworten  sollen auch im chat-fenster zu sehen sein 
+
+wenn die eingabe abgeschlossen wurde soll im fenster für die zeit bis die antwort verarbeitet wurde eine ausgabe erscheienen die zeigt, dass das programm abreitet
+es können dan auch neue eingaben gemacht werden
