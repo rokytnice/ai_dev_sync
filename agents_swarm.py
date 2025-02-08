@@ -95,9 +95,11 @@ def process_task(task):
 
     results = []
     for subtask in subtasks:
+        time.sleep(4)  # Fügt eine 4-Sekunden-Wartezeit vor jeder Anfrage hinzu
         results.append(process_task(subtask))
 
     return {"task": task, "subtasks": results}
+
 
 def aggregate_results(results):
     """
@@ -113,7 +115,8 @@ def aggregate_results(results):
 
 if __name__ == "__main__":
     # Beispielaufgabe
-    initial_task = "Erstelle ein Projektplan für ein KI-gestütztes Chat-System."
+    initial_task = "Erstelle ein Konzept mit dem ich eine Software entwickeln kann, die Java Tests für Java-Klassen schreibt und ausführt."
+    #initial_task = "Erstelle ein Projektplan für ein KI-gestütztes Chat-System."
 
     # Verarbeite die Aufgabe rekursiv
     results = process_task(initial_task)
