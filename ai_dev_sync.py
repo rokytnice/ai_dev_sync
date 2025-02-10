@@ -123,11 +123,12 @@ class ResponseHandler:
                 logging.info(f"Updated file: {file_path}")
 
 def process_files(base_prompt: str, gui=None):
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("API_KEY")
     if not api_key:
-        raise EnvironmentError("API key is missing. Set GEMINI_API_KEY as an environment variable.")
+        raise EnvironmentError("API key is missing. Set API_KEY as an environment variable.")
 
-    base_directory = Path("/home/andre/IdeaProjects/algosec-connector/src/main/java/fwat/application/security/logging")
+    base_directory = Path("/home/andre/IdeaProjects/algosec-portal")
+    # base_directory = Path("/home/andre/IdeaProjects/algosec-connector/src/main/java/fwat/application/security/logging")
     file_manager = FileManager(base_directory)
     prompt_processor = PromptProcessor(file_manager)
     response_handler = ResponseHandler(file_manager, gui)
