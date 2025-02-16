@@ -127,8 +127,8 @@ def process_files(base_prompt: str, gui=None):
     if not api_key:
         raise EnvironmentError("API key is missing. Set API_KEY as an environment variable.")
 
-    base_directory = Path("/home/andre/IdeaProjects/algosec-portal")
-    # base_directory = Path("/home/andre/IdeaProjects/algosec-connector/src/main/java/fwat/application/security/logging")
+    #base_directory = Path("/home/andre/IdeaProjects/algosec-portal")
+    base_directory = Path("/home/andre/IdeaProjects/algosec-connector/src/main/java/fwat/application/security/logging")
     file_manager = FileManager(base_directory)
     prompt_processor = PromptProcessor(file_manager)
     response_handler = ResponseHandler(file_manager, gui)

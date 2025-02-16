@@ -5,59 +5,40 @@ import json
 import re
 
 
-def extract_java_code(response_text: str) -> str:
+def extract_java_code(response_json: dict) -> str:
     """
-    Extrahiert den Java-Code aus einem Markdown-Codeblock (```java ... ```)
+    Extrahiert den Java-Code aus der API-Antwort, insbesondere aus content -> parts -> text.
     """
-    match = re.search(r'```java\n(.*?)```', response_text, re.DOTALL)
-    if match:
-        return match.group(1).strip()
-    return response_text.strip()
+    try:
+        content_parts = response_json["candidates"][0]["content"]["parts"]
+        if isinstance(content_parts, list) and len(content_parts) > 0:
+            response_text = content_parts[0].get("text", "")
+            match = re.search(r'```java\n(.*?)```', response_text, re.DOTALL)
+            return match.group(1).strip() if match else response_text.strip()
+    except (KeyError, IndexError, AttributeError):
+        print("Fehler: Unerwartete API-Antwortstruktur.")
+    return ""
 
 
-def call_ai_agent(source_code: str, api_key: str) -> str:
+def extract_package_name(java_code: str) -> str:
     """
-    Sendet den Quellcode an die AI-Schnittstelle und erhält eine generierte Testklasse.
-    :param source_code: Der Quellcode der Java-Klasse.
-    :param api_key: Der API-Schlüssel für den LLM-Dienst.
-    :return: Der generierte Testcode als String oder eine Fehlermeldung.
+    Extrahiert den Package-Namen aus dem generierten Java-Code.
     """
-    print(f"Sende Quellcode an AI-Agent zur Verarbeitung...")
-
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-    headers = {"Content-Type": "application/json"}
-    data = {
-        "contents": [{
-            "parts": [{"text": f"Erstelle eine JUnit-Testklasse für den folgenden Java-Code:\n{source_code}"}]
-        }]
-    }
-
-    print("--- API Request ---")
-    print(json.dumps(data, indent=2))
-
-    response = requests.post(url, headers=headers, data=json.dumps(data))
-    response_json = response.json()
-
-    print("--- API Response ---")
-    print(json.dumps(response_json, indent=2))
-
-    if "candidates" not in response_json or not response_json["candidates"]:
-        print("Fehler: Unerwartete API-Antwort erhalten.")
-        return ""
-
-    content = response_json["candidates"][0].get("content", "")
-    if not isinstance(content, str):
-        print("Fehler: API-Antwort enthält kein gültiges Textformat.")
-        return ""
-
-    return extract_java_code(content)
+    match = re.search(r'package\s+([a-zA-Z0-9_.]+);', java_code)
+    return match.group(1) if match else ""
 
 
 def save_test_class(project_dir: str, test_code: str, class_name: str):
     """
-    Speichert die generierte Testklasse im src/test Verzeichnis.
+    Speichert die generierte Testklasse an der richtigen Stelle basierend auf dem Package-Namen.
     """
+    package_name = extract_package_name(test_code)
     test_dir = os.path.join(project_dir, "src", "test")
+
+    if package_name:
+        package_path = package_name.replace(".", os.sep)
+        test_dir = os.path.join(test_dir, package_path)
+
     if not os.path.isdir(test_dir):
         os.makedirs(test_dir)
 
@@ -73,10 +54,10 @@ def find_java_class(directory: str, class_name: str):
     """
     Sucht rekursiv nach einer Java-Klasse im Verzeichnis und loggt die durchsuchten Verzeichnisse und Dateien.
     """
-    # print(f"Suche nach der Java-Klasse {class_name} in {directory}...")
+    print(f"Suche nach der Java-Klasse {class_name} in {directory}...")
     expected_filename = f"{class_name}.java"
     for root, _, files in os.walk(directory):
-        # print(f"Durchsuche Verzeichnis: {root}")
+        print(f"Durchsuche Verzeichnis: {root}")
         for file in files:
             print(f"Gefundene Datei: {file}")
             if file.strip() == expected_filename.strip():
