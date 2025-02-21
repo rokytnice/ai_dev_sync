@@ -1,5 +1,5 @@
  
-https://chatgpt.com/g/g-p-67a7385328288191a269d58b18eda88b-ai-projects/c/67a73880-0ed8-8005-825d-46e57c59427b
+https://chatgpt.com/c/67b81ca4-2494-8005-9b94-f8606fcf875a
 
 **Anforderungen für das Python-Programm zur Ausführung von Java-Tests mit Gradle**
 
